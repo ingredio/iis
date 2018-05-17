@@ -19,10 +19,10 @@ import eu.dnetlib.iis.wf.affmatching.model.MatchedOrganization;
 * @author mhorst
 */
 
-public class ProjectRelatedDocOrgMatchReportGenerator implements Serializable {
+public class ProjectBasedDocOrgMatchReportGenerator implements Serializable {
     
-    public static final String DOC_ORG_REFERENCES = "processing.projectRelatedDocOrgMatching.docOrgReference";
-    public static final String DOCS_WITH_AT_LEAST_ONE_ORG = "processing.projectRelatedDocOrgMatching.doc";
+    public static final String DOC_ORG_REFERENCES = "processing.projectBasedDocOrgMatching.docOrgReference";
+    public static final String DOCS_WITH_AT_LEAST_ONE_ORG = "processing.projectBasedDocOrgMatching.doc";
 
     private static final long serialVersionUID = 1L;
 

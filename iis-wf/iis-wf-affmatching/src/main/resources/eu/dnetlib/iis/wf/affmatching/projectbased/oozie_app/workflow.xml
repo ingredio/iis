@@ -1,4 +1,4 @@
-<workflow-app xmlns="uri:oozie:workflow:0.4" name="proj-based-matching">
+<workflow-app xmlns="uri:oozie:workflow:0.4" name="project-based-docorg-matching">
 
     <parameters>
         <property>
@@ -76,8 +76,8 @@
     
             <master>yarn-cluster</master>
             <mode>cluster</mode>
-            <name>Project based Document to Organization Matching</name>
-            <class>eu.dnetlib.iis.wf.affmatching.ProjectRelatedDocOrgMatchingJob</class>
+            <name>Project based Document-Organization Matching</name>
+            <class>eu.dnetlib.iis.wf.affmatching.ProjectBasedMatchingJob</class>
             <jar>${oozieTopWfApplicationPath}/lib/iis-wf-affmatching-${projectVersion}.jar</jar>
             
             <spark-opts>--executor-memory ${sparkExecutorMemory} --executor-cores ${sparkExecutorCores} --driver-memory=${sparkDriverMemory}</spark-opts>
@@ -87,7 +87,7 @@
             <arg>-inputAvroProjOrgPath=${input_project_to_organization}</arg>
             
             <arg>-outputAvroPath=${output}</arg>
-            <arg>-outputAvroReportPath=${output_report_root_path}/project-based-doc-org-matching</arg>
+            <arg>-outputAvroReportPath=${output_report_root_path}/project-based-docorg-matching</arg>
             
             <arg>-inputDocProjConfidenceThreshold=${document_project_confidence_threshold}</arg>
             

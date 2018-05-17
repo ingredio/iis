@@ -23,7 +23,7 @@ import eu.dnetlib.iis.wf.affmatching.bucket.projectorg.read.IisDocumentProjectRe
 import eu.dnetlib.iis.wf.affmatching.bucket.projectorg.read.IisInferredDocumentProjectReader;
 import eu.dnetlib.iis.wf.affmatching.bucket.projectorg.read.IisProjectOrganizationReader;
 import eu.dnetlib.iis.wf.affmatching.model.MatchedOrganization;
-import eu.dnetlib.iis.wf.affmatching.write.ProjectRelatedDocOrgMatchReportGenerator;
+import eu.dnetlib.iis.wf.affmatching.write.ProjectBasedDocOrgMatchReportGenerator;
 import pl.edu.icm.sparkutils.avro.SparkAvroSaver;
 import scala.Tuple2;
 
@@ -35,7 +35,7 @@ import scala.Tuple2;
  * @author mhorst
  */
 
-public class ProjectRelatedDocOrgMatchingJob {
+public class ProjectBasedMatchingJob {
     
 	
     //------------------------ LOGIC --------------------------
@@ -51,7 +51,7 @@ public class ProjectRelatedDocOrgMatchingJob {
         conf.set("spark.kryo.registrator", "pl.edu.icm.sparkutils.avro.AvroCompatibleKryoRegistrator");
         
         SparkAvroSaver sparkAvroSaver = new SparkAvroSaver();
-        ProjectRelatedDocOrgMatchReportGenerator reportGenerator = new ProjectRelatedDocOrgMatchReportGenerator();
+        ProjectBasedDocOrgMatchReportGenerator reportGenerator = new ProjectBasedDocOrgMatchReportGenerator();
         
         final String inputAvroDocProjPath = params.inputAvroDocProjPath;
         final String inputAvroInferredDocProjPath = params.inputAvroInferredDocProjPath;
