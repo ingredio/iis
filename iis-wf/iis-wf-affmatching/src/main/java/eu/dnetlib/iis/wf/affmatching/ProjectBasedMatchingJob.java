@@ -4,8 +4,10 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -15,6 +17,7 @@ import com.beust.jcommander.Parameters;
 
 import eu.dnetlib.iis.common.java.io.HdfsUtils;
 import eu.dnetlib.iis.common.schemas.ReportEntry;
+import eu.dnetlib.iis.importer.schemas.Project;
 import eu.dnetlib.iis.wf.affmatching.bucket.projectorg.model.AffMatchDocumentProject;
 import eu.dnetlib.iis.wf.affmatching.bucket.projectorg.model.AffMatchProjectOrganization;
 import eu.dnetlib.iis.wf.affmatching.bucket.projectorg.read.DocumentProjectFetcher;
@@ -24,6 +27,7 @@ import eu.dnetlib.iis.wf.affmatching.bucket.projectorg.read.IisInferredDocumentP
 import eu.dnetlib.iis.wf.affmatching.bucket.projectorg.read.IisProjectOrganizationReader;
 import eu.dnetlib.iis.wf.affmatching.model.MatchedOrganization;
 import eu.dnetlib.iis.wf.affmatching.write.ProjectBasedDocOrgMatchReportGenerator;
+import pl.edu.icm.sparkutils.avro.SparkAvroLoader;
 import pl.edu.icm.sparkutils.avro.SparkAvroSaver;
 import scala.Tuple2;
 
@@ -56,7 +60,9 @@ public class ProjectBasedMatchingJob {
         final String inputAvroDocProjPath = params.inputAvroDocProjPath;
         final String inputAvroInferredDocProjPath = params.inputAvroInferredDocProjPath;
         final String inputAvroProjOrgPath = params.inputAvroProjOrgPath;
+        final String inputAvroProjectPath = params.inputAvroProjectPath;
         
+        final String projectFundingClassWhitelistRegex = params.projectFundingClassWhitelistRegex;
         final Float docProjConfidenceThreshold = params.inputDocProjConfidenceThreshold;
         
         final String outputPath = params.outputAvroPath;
@@ -85,9 +91,11 @@ public class ProjectBasedMatchingJob {
             
             JavaRDD<AffMatchProjectOrganization> projOrg = projectOrganizationReader.readProjectOrganizations(sc, inputAvroProjOrgPath);
             
-            // accepting project relations only with single organization
-            JavaRDD<AffMatchProjectOrganization> filteredProjOrg = projOrg.keyBy(e -> e.getProjectId()).groupByKey()
-                    .flatMap(e -> getRelationsWithSingleOrganization(e));
+            JavaPairRDD<String, CharSequence> projectToFundingClassFiltered = getProjectToFundingClass(sc, inputAvroProjectPath, projectFundingClassWhitelistRegex);
+            
+            // accepting project relations with accepted funder and single organization only
+            JavaRDD<AffMatchProjectOrganization> filteredProjOrg = projOrg.keyBy(e -> e.getProjectId()).join(projectToFundingClassFiltered).mapToPair(e -> new Tuple2<>(e._1, e._2._1)).groupByKey()
+                    .flatMap(e -> getRelationsWithSingleOrganization(e._2));
             
             JavaRDD<MatchedOrganization> matchedDocOrg = filteredDocProj.keyBy(e -> e.getProjectId())
                     .join(filteredProjOrg.keyBy(e -> e.getProjectId())).map(e -> buildMatchedOrganization(e));
@@ -109,13 +117,19 @@ public class ProjectBasedMatchingJob {
     
     //------------------------ PRIVATE --------------------------
     
+    private static JavaPairRDD<String, CharSequence> getProjectToFundingClass(JavaSparkContext sc, String inputAvroProjectPath, String projectFundingClassWhitelistRegex) {
+        SparkAvroLoader avroLoader = new SparkAvroLoader();
+        JavaRDD<Project> projects = avroLoader.loadJavaRDD(sc, inputAvroProjectPath, Project.class);
+        return projects.mapToPair(e -> new Tuple2<>(e.getId().toString(), e.getFundingClass())).filter(e -> Pattern.matches(projectFundingClassWhitelistRegex, e._2));
+    }
+    
     private static Tuple2<CharSequence, CharSequence> buildMatchedOrgKey(MatchedOrganization element) {
         return new Tuple2<>(element.getDocumentId(), element.getOrganizationId());
     }
     
-    private static List<AffMatchProjectOrganization> getRelationsWithSingleOrganization(Tuple2<String, Iterable<AffMatchProjectOrganization>> element) {
+    private static List<AffMatchProjectOrganization> getRelationsWithSingleOrganization(Iterable<AffMatchProjectOrganization> element) {
         
-        Iterator<AffMatchProjectOrganization> it = element._2.iterator();
+        Iterator<AffMatchProjectOrganization> it = element.iterator();
         if (it.hasNext()) {
             AffMatchProjectOrganization result = it.next();
             if (!it.hasNext()) {
@@ -137,6 +151,9 @@ public class ProjectBasedMatchingJob {
     @Parameters(separators = "=")
     private static class ProjectRelatedDocOrgMatchingJobParameters {
         
+        @Parameter(names = "-inputAvroProjectPath", required = true, description="path to directory with avro files containing project entities")
+        private String inputAvroProjectPath;
+        
         @Parameter(names = "-inputAvroInferredDocProjPath", required = true, description="path to directory with avro files containing inferred document to project relations")
         private String inputAvroInferredDocProjPath;
         
@@ -145,6 +162,9 @@ public class ProjectBasedMatchingJob {
         
         @Parameter(names = "-inputDocProjConfidenceThreshold", required = false, description="minimal confidence level for document to project relations (no limit by default)")
         private Float inputDocProjConfidenceThreshold = null;
+        
+        @Parameter(names = "-projectFundingClassWhitelistRegex", required = false, description="regex accepting project references by funding class")
+        private String projectFundingClassWhitelistRegex;
         
         @Parameter(names = "-inputAvroProjOrgPath", required = true, description="path to directory with avro files containing project to organization relations")
         private String inputAvroProjOrgPath;

@@ -28,6 +28,8 @@
             <main-class>eu.dnetlib.iis.common.java.ProcessWrapper</main-class>
             <arg>eu.dnetlib.iis.common.java.jsonworkflownodes.Producer</arg>
             
+            <arg>-C{project, eu.dnetlib.iis.importer.schemas.Project,
+                data/projectbased/input/project.json}</arg>
             <arg>-C{document_to_project, eu.dnetlib.iis.importer.schemas.DocumentToProject,
                 data/projectbased/input/docProj.json}</arg>
             <arg>-C{inferred_document_to_project, eu.dnetlib.iis.referenceextraction.project.schemas.DocumentToProject,
@@ -35,6 +37,7 @@
             <arg>-C{project_to_organization, eu.dnetlib.iis.importer.schemas.ProjectToOrganization,
                 data/projectbased/input/projOrg.json}</arg>
             
+            <arg>-Oproject=${workingDir}/data_producer/project</arg>
             <arg>-Odocument_to_project=${workingDir}/data_producer/document_to_project</arg>
             <arg>-Oinferred_document_to_project=${workingDir}/data_producer/document_to_project_inferred</arg>
             <arg>-Oproject_to_organization=${workingDir}/data_producer/project_to_organization</arg>
@@ -50,6 +53,10 @@
             <app-path>${wf:appPath()}/project_based_matching</app-path>
             <propagate-configuration/>
             <configuration>
+                <property>
+                    <name>input_project</name>
+                    <value>${workingDir}/data_producer/project</value>
+                </property>
                 <property>
                     <name>input_document_to_project</name>
                     <value>${workingDir}/data_producer/document_to_project</value>
@@ -75,8 +82,12 @@
                     <value>${workingDir}/projectbased-matching</value>
                 </property>
                 <property>
-                    <name>inputDocProjConfidenceThreshold</name>
+                    <name>document_project_confidence_threshold</name>
                     <value>0.8</value>
+                </property>
+                 <property>
+                    <name>project_fundingclass_whitelist_regex</name>
+                    <value>^EC.*</value>
                 </property>
             </configuration>
         </sub-workflow>

@@ -14,6 +14,7 @@ import eu.dnetlib.iis.common.schemas.ReportEntry;
 import eu.dnetlib.iis.common.utils.AvroAssertTestUtil;
 import eu.dnetlib.iis.common.utils.AvroTestUtils;
 import eu.dnetlib.iis.common.utils.JsonAvroTestUtils;
+import eu.dnetlib.iis.importer.schemas.Project;
 import eu.dnetlib.iis.importer.schemas.ProjectToOrganization;
 import eu.dnetlib.iis.referenceextraction.project.schemas.DocumentToProject;
 import eu.dnetlib.iis.wf.affmatching.model.MatchedOrganization;
@@ -38,7 +39,11 @@ public class ProjectBasedMatchingJobTest {
     
     private float inputDocProjConfidenceThreshold = 0.8f;
     
+    private String projectFundingClassWhitelistRegex = "^EC.*";
+    
     private String inputProjOrgDirPath;
+    
+    private String inputProjectDirPath;
     
     private String outputDirPath;
     
@@ -53,6 +58,7 @@ public class ProjectBasedMatchingJobTest {
         inputInferredDocProjDirPath = workingDir + "/projectbased_matching/input/doc_proj_inferred";
         inputDocProjDirPath = workingDir + "/projectbased_matching/input/doc_proj";
         inputProjOrgDirPath = workingDir + "/projectbased_matching/input/proj_org";
+        inputProjectDirPath = workingDir + "/projectbased_matching/input/project";
         outputDirPath = workingDir + "/projectbased_matching/output";
         outputReportPath = workingDir + "/projectbased_matching/report";
         
@@ -78,6 +84,7 @@ public class ProjectBasedMatchingJobTest {
         String jsonInputInferredDocProjPath = "src/test/resources/data/projectbased/input/docProjInferred.json";
         String jsonInputDocProjPath = "src/test/resources/data/projectbased/input/docProj.json";
         String jsonInputProjOrgPath = "src/test/resources/data/projectbased/input/projOrg.json";
+        String jsonInputProjectPath = "src/test/resources/data/projectbased/input/project.json";
         
         String jsonOutputPath = "src/test/resources/data/projectbased/expectedOutput/matchedOrganizations.json";
         String jsonOutputReportPath = "src/test/resources/data/projectbased/expectedOutput/report.json";
@@ -91,6 +98,9 @@ public class ProjectBasedMatchingJobTest {
         
         AvroTestUtils.createLocalAvroDataStore(
                 JsonAvroTestUtils.readJsonDataStore(jsonInputProjOrgPath, ProjectToOrganization.class), inputProjOrgDirPath);
+        
+        AvroTestUtils.createLocalAvroDataStore(
+                JsonAvroTestUtils.readJsonDataStore(jsonInputProjectPath, Project.class), inputProjectDirPath);
         
         // execute & assert
         
@@ -114,7 +124,9 @@ public class ProjectBasedMatchingJobTest {
                                            .addArg("-inputAvroDocProjPath", inputDocProjDirPath)
                                            .addArg("-inputAvroInferredDocProjPath", inputInferredDocProjDirPath)
                                            .addArg("-inputDocProjConfidenceThreshold", String.valueOf(inputDocProjConfidenceThreshold))
+                                           .addArg("-projectFundingClassWhitelistRegex", projectFundingClassWhitelistRegex)
                                            .addArg("-inputAvroProjOrgPath", inputProjOrgDirPath)
+                                           .addArg("-inputAvroProjectPath", inputProjectDirPath)
                                            .addArg("-outputAvroPath", outputDirPath)
                                            .addArg("-outputAvroReportPath", outputReportPath)
                                            .addJobProperty("spark.driver.host", "localhost")
