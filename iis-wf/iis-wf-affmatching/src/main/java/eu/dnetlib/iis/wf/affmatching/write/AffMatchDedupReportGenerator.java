@@ -11,7 +11,7 @@ import com.clearspring.analytics.util.Lists;
 import com.google.common.base.Preconditions;
 
 import eu.dnetlib.iis.common.schemas.ReportEntry;
-import eu.dnetlib.iis.wf.affmatching.model.MatchedOrganization;
+import eu.dnetlib.iis.wf.affmatching.model.MatchedOrganizationWithProvenance;
 
 /**
  * Generator of the project based doc-org matching module execution report entries.
@@ -19,10 +19,10 @@ import eu.dnetlib.iis.wf.affmatching.model.MatchedOrganization;
 * @author mhorst
 */
 
-public class ProjectBasedDocOrgMatchReportGenerator implements Serializable {
+public class AffMatchDedupReportGenerator implements Serializable {
     
-    public static final String DOC_ORG_REFERENCES = "processing.docOrgMatching.projectBased.docOrgReference";
-    public static final String DOCS_WITH_AT_LEAST_ONE_ORG = "processing.docOrgMatching.projectBased.doc";
+    public static final String DOC_ORG_REFERENCES = "processing.docOrgMatching.deduped.docOrgReference";
+    public static final String DOCS_WITH_AT_LEAST_ONE_ORG = "processing.docOrgMatching.deduped.doc";
 
     private static final long serialVersionUID = 1L;
 
@@ -34,7 +34,7 @@ public class ProjectBasedDocOrgMatchReportGenerator implements Serializable {
      * Generates execution report entries with the affiliation module execution results.
      * See the {@link AffMatchReportCounters} for the list of generated entries.
      */
-    public List<ReportEntry> generateReport(JavaRDD<MatchedOrganization> matchedDocOrganizations) {
+    public List<ReportEntry> generateReport(JavaRDD<MatchedOrganizationWithProvenance> matchedDocOrganizations) {
         
         Preconditions.checkNotNull(matchedDocOrganizations);
         
