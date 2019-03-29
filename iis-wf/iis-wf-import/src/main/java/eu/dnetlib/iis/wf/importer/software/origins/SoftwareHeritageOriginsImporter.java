@@ -142,8 +142,7 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
                 .getParamValue(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_RATELIMIT_DELAY, "10000", parameters));
 
         NamedCounters counters = new NamedCounters(new String[] { COUNTER_NAME_TOTAL });
-
-        String lastElementIndex = null;
+        int currentCount = 0;
         
         if (StringUtils.isNotBlank(shEndpointUriRoot)
                 && !WorkflowRuntimeParameters.UNDEFINED_NONEMPTY_VALUE.equals(shEndpointUriRoot)) {
@@ -151,7 +150,6 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
             try (DataFileWriter<SoftwareHeritageOrigin> originsWriter = getWriter(FileSystem.get(conf), portBindings)) {
 
                 long startTime = System.currentTimeMillis();
-                int currentCount = 0;
 
                 Gson gson = new Gson();
 
@@ -175,7 +173,6 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
                             log.warn("SH endpoint rate limit reached, delaying for " + delayWhenRateLimitHitMillis
                                     + " ms, server response: " + EntityUtils.toString(httpResponse.getEntity()));
                             Thread.sleep(delayWhenRateLimitHitMillis);
-                            // EntityUtils.consume(httpResponse.getEntity());
                             continue;
                         } else {
                             throw new RuntimeException("got unhandled HTTP status code when accessing SH endpoint: "
@@ -199,8 +196,6 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
                                     startTime = System.currentTimeMillis();
                                 }
                             }
-                            // FIXME make sure we can safely rely on ID as index, otherwise rely on start_from and offset
-                            lastElementIndex = entries[entries.length-1].getId();
                         }
                     }
 
@@ -217,7 +212,7 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
             log.warn("no records imported from SH URI: " + shEndpointUriRoot);
         }
         countersWriter.writeCounters(counters, System.getProperty(OOZIE_ACTION_OUTPUT_FILENAME));
-        storeNextElementIndex(buildNextElementIndex(startElementIndex, lastElementIndex));
+        storeNextElementIndex(startElementIndex + currentCount);
     }
 
     /**
@@ -231,7 +226,7 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
 
     // ------------------------ PRIVATE --------------------------
     
-    private void storeNextElementIndex(String nextElementIndex) throws IOException {
+    private void storeNextElementIndex(int nextElementIndex) throws IOException {
         File file = new File(System.getProperty(OOZIE_ACTION_OUTPUT_FILENAME));
 
         Properties props = new Properties();
@@ -246,7 +241,7 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
             }        
         }
         
-        props.put(OUTPUT_PROPERTY_NEXT_RECORD_INDEX, nextElementIndex);
+        props.put(OUTPUT_PROPERTY_NEXT_RECORD_INDEX, String.valueOf(nextElementIndex));
         
         OutputStream os = new FileOutputStream(file);
         try {
@@ -254,14 +249,6 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
         } finally {
             os.close(); 
         }   
-    }
-    
-    private static String buildNextElementIndex(int startElementIndex, String lastElementIndex) {
-        if (StringUtils.isNotBlank(lastElementIndex)) {
-            return String.valueOf(Integer.parseInt(lastElementIndex) + 1);
-        } else {
-            return String.valueOf(startElementIndex);
-        }
     }
 
     private static String buildUri(String rootUri, int startElement, int pageSize) {
