@@ -5,6 +5,7 @@ import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_
 import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_SOFTWARE_HERITAGE_ENDPOINT_HOST;
 import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_SOFTWARE_HERITAGE_ENDPOINT_PORT;
 import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_SOFTWARE_HERITAGE_ENDPOINT_RATELIMIT_DELAY;
+import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_SOFTWARE_HERITAGE_ENDPOINT_RETRY_COUNT;
 import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_SOFTWARE_HERITAGE_ENDPOINT_READ_TIMEOUT;
 import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_SOFTWARE_HERITAGE_ENDPOINT_SCHEME;
 import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_SOFTWARE_HERITAGE_ENDPOINT_URI_ROOT;
@@ -138,9 +139,12 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
                 .getParamValue(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_CONNECTION_TIMEOUT, "60000", parameters));
         int readTimeout = Integer.parseInt(WorkflowRuntimeParameters
                 .getParamValue(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_READ_TIMEOUT, "60000", parameters));
-        int delayWhenRateLimitHitMillis = Integer.parseInt(WorkflowRuntimeParameters
+        int delayMillis = Integer.parseInt(WorkflowRuntimeParameters
                 .getParamValue(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_RATELIMIT_DELAY, "10000", parameters));
 
+        int maxRetryCount = Integer.parseInt(WorkflowRuntimeParameters
+                .getParamValueWithUndefinedCheck(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_RETRY_COUNT, "10", parameters));
+        
         NamedCounters counters = new NamedCounters(new String[] { COUNTER_NAME_TOTAL });
         int currentCount = 0;
         
@@ -163,6 +167,8 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
 
                 log.info("executing first page request to " + target + " with: " + getRequest);
 
+                int retryCount=0;
+                
                 while (getRequest != null) {
                     HttpResponse httpResponse = httpclient.execute(target, getRequest);
                     int statusCode = httpResponse.getStatusLine().getStatusCode();
@@ -170,14 +176,26 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
                     if (statusCode!=200) {
                         if (statusCode==429) {
                             //got throttled, delaying...
-                            log.warn("SH endpoint rate limit reached, delaying for " + delayWhenRateLimitHitMillis
+                            log.warn("SH endpoint rate limit reached, delaying for " + delayMillis
                                     + " ms, server response: " + EntityUtils.toString(httpResponse.getEntity()));
-                            Thread.sleep(delayWhenRateLimitHitMillis);
+                            Thread.sleep(delayMillis);
                             continue;
                         } else {
-                            throw new RuntimeException("got unhandled HTTP status code when accessing SH endpoint: "
+                            String errMessage = "got unhandled HTTP status code when accessing SH endpoint: "
                                     + statusCode + ", full status: " + httpResponse.getStatusLine()
-                                    + ", server response: " + EntityUtils.toString(httpResponse.getEntity()));
+                                    + ", server response: " + EntityUtils.toString(httpResponse.getEntity());
+                            if (retryCount < maxRetryCount) {
+                                retryCount++;
+                                log.error(errMessage + ", number of retries left: " + (maxRetryCount-retryCount));
+                                Thread.sleep(delayMillis);
+                                continue;
+                            } else {
+                                throw new RuntimeException(errMessage);    
+                            }
+                        }
+                    } else {
+                        if (retryCount > 0) {
+                            retryCount=0;    
                         }
                     }
 

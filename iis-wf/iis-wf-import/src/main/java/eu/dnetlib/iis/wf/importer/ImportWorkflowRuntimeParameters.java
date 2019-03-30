@@ -36,6 +36,7 @@ public final class ImportWorkflowRuntimeParameters {
 	public static final String IMPORT_SOFTWARE_HERITAGE_ENDPOINT_SCHEME = "import.software.heritage.endpoint.scheme";
 	public static final String IMPORT_SOFTWARE_HERITAGE_ENDPOINT_URI_ROOT = "import.software.heritage.endpoint.uri.root";
 	public static final String IMPORT_SOFTWARE_HERITAGE_ENDPOINT_RATELIMIT_DELAY = "import.software.heritage.endpoint.ratelimit.delay";
+	public static final String IMPORT_SOFTWARE_HERITAGE_ENDPOINT_RETRY_COUNT = "import.software.heritage.endpoint.retry.count";
 	public static final String IMPORT_SOFTWARE_HERITAGE_ENDPOINT_READ_TIMEOUT = "import.software.heritage.endpoint.read.timeout";
 	public static final String IMPORT_SOFTWARE_HERITAGE_ENDPOINT_CONNECTION_TIMEOUT = "import.software.heritage.endpoint.connection.timeout";
 	
