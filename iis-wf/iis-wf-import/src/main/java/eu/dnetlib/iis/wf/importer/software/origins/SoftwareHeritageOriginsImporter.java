@@ -5,8 +5,8 @@ import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_
 import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_SOFTWARE_HERITAGE_ENDPOINT_HOST;
 import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_SOFTWARE_HERITAGE_ENDPOINT_PORT;
 import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_SOFTWARE_HERITAGE_ENDPOINT_RATELIMIT_DELAY;
-import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_SOFTWARE_HERITAGE_ENDPOINT_RETRY_COUNT;
 import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_SOFTWARE_HERITAGE_ENDPOINT_READ_TIMEOUT;
+import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_SOFTWARE_HERITAGE_ENDPOINT_RETRY_COUNT;
 import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_SOFTWARE_HERITAGE_ENDPOINT_SCHEME;
 import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_SOFTWARE_HERITAGE_ENDPOINT_URI_ROOT;
 import static eu.dnetlib.iis.wf.importer.ImportWorkflowRuntimeParameters.IMPORT_SOFTWARE_HERITAGE_PAGE_SIZE;
@@ -32,6 +32,7 @@ import org.apache.http.HttpEntity;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
 import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.params.BasicHttpParams;
@@ -55,8 +56,7 @@ import eu.dnetlib.iis.common.java.porttype.PortType;
 import eu.dnetlib.iis.referenceextraction.softwareurl.schemas.SoftwareHeritageOrigin;
 
 /**
- * Importer module retrieving incrementally origins from Software Heritage
- * RESTful endpoint.
+ * Importer module retrieving (incrementally) origins from Software Heritage RESTful endpoint.
  * 
  * @author mhorst
  *
@@ -106,50 +106,13 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
     @Override
     public void run(PortBindings portBindings, Configuration conf, Map<String, String> parameters) throws Exception {
 
-        Preconditions.checkArgument(parameters.containsKey(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_URI_ROOT),
-                "unknown software heritage endpoint URI, required parameter '%s' is missing!",
-                IMPORT_SOFTWARE_HERITAGE_ENDPOINT_URI_ROOT);
-        String shEndpointUriRoot = parameters.get(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_URI_ROOT);
-
-        Preconditions.checkArgument(parameters.containsKey(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_HOST),
-                "unknown software heritage endpoint host, required parameter '%s' is missing!",
-                IMPORT_SOFTWARE_HERITAGE_ENDPOINT_HOST);
-        String shEndpointHost = parameters.get(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_HOST);
-
-        Preconditions.checkArgument(parameters.containsKey(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_SCHEME),
-                "unknown software heritage endpoint scheme (e.g. https), required parameter '%s' is missing!",
-                IMPORT_SOFTWARE_HERITAGE_ENDPOINT_SCHEME);
-        String shEndpointScheme = parameters.get(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_SCHEME);
-
-        Preconditions.checkArgument(parameters.containsKey(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_PORT),
-                "unknown software heritage endpoint port, required parameter '%s' is missing!",
-                IMPORT_SOFTWARE_HERITAGE_ENDPOINT_PORT);
-        int shEndpointPort = Integer.parseInt(parameters.get(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_PORT));
-
-        Preconditions.checkArgument(parameters.containsKey(IMPORT_SOFTWARE_HERITAGE_START_INDEX),
-                "unknown software heritage start element, required parameter '%s' is missing!",
-                IMPORT_SOFTWARE_HERITAGE_START_INDEX);
-        int startElementIndex = Integer.parseInt(WorkflowRuntimeParameters
-                .getParamValueWithUndefinedCheck(IMPORT_SOFTWARE_HERITAGE_START_INDEX, "1", parameters));
-        
-        int pageSize = Integer.parseInt(WorkflowRuntimeParameters.getParamValue(IMPORT_SOFTWARE_HERITAGE_PAGE_SIZE,
-                SOFTWARE_HERITAGE_PAGE_SIZE_DEFAULT_VALUE, parameters));
-
-        int connectionTimeout = Integer.parseInt(WorkflowRuntimeParameters
-                .getParamValue(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_CONNECTION_TIMEOUT, "60000", parameters));
-        int readTimeout = Integer.parseInt(WorkflowRuntimeParameters
-                .getParamValue(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_READ_TIMEOUT, "60000", parameters));
-        int delayMillis = Integer.parseInt(WorkflowRuntimeParameters
-                .getParamValue(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_RATELIMIT_DELAY, "10000", parameters));
-
-        int maxRetryCount = Integer.parseInt(WorkflowRuntimeParameters
-                .getParamValueWithUndefinedCheck(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_RETRY_COUNT, "10", parameters));
+        SoftwareHeritageOriginsImporterParams params = new SoftwareHeritageOriginsImporterParams(parameters);
         
         NamedCounters counters = new NamedCounters(new String[] { COUNTER_NAME_TOTAL });
         int currentCount = 0;
         
-        if (StringUtils.isNotBlank(shEndpointUriRoot)
-                && !WorkflowRuntimeParameters.UNDEFINED_NONEMPTY_VALUE.equals(shEndpointUriRoot)) {
+        if (StringUtils.isNotBlank(params.getShEndpointUriRoot())
+                && !WorkflowRuntimeParameters.UNDEFINED_NONEMPTY_VALUE.equals(params.getShEndpointUriRoot())) {
 
             try (DataFileWriter<SoftwareHeritageOrigin> originsWriter = getWriter(FileSystem.get(conf), portBindings)) {
 
@@ -157,15 +120,12 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
 
                 Gson gson = new Gson();
 
-                HttpParams httpParams = new BasicHttpParams();
-                HttpConnectionParams.setConnectionTimeout(httpParams, connectionTimeout);
-                HttpConnectionParams.setSoTimeout(httpParams, readTimeout);
-                DefaultHttpClient httpclient = new DefaultHttpClient(httpParams);
+                HttpClient httpclient = buildHttpClient(params.getConnectionTimeout(), params.getReadTimeout());
 
-                HttpHost target = new HttpHost(shEndpointHost, shEndpointPort, shEndpointScheme);
-                HttpRequest getRequest = new HttpGet(buildUri(shEndpointUriRoot, startElementIndex, pageSize));
+                HttpHost target = new HttpHost(params.getShEndpointHost(), params.getShEndpointPort(), params.getShEndpointScheme());
+                HttpRequest getRequest = new HttpGet(buildUri(params.getShEndpointUriRoot(), params.getStartElementIndex(), params.getPageSize()));
 
-                log.info("executing first page request to " + target + " with: " + getRequest);
+                log.info("executing first page request to " + target + " with: " + getRequest.toString());
 
                 int retryCount=0;
                 
@@ -176,18 +136,18 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
                     if (statusCode!=200) {
                         if (statusCode==429) {
                             //got throttled, delaying...
-                            log.warn("SH endpoint rate limit reached, delaying for " + delayMillis
+                            log.warn("SH endpoint rate limit reached, delaying for " + params.getDelayMillis()
                                     + " ms, server response: " + EntityUtils.toString(httpResponse.getEntity()));
-                            Thread.sleep(delayMillis);
+                            Thread.sleep(params.getDelayMillis());
                             continue;
                         } else {
                             String errMessage = "got unhandled HTTP status code when accessing SH endpoint: "
                                     + statusCode + ", full status: " + httpResponse.getStatusLine()
                                     + ", server response: " + EntityUtils.toString(httpResponse.getEntity());
-                            if (retryCount < maxRetryCount) {
+                            if (retryCount < params.getMaxRetryCount()) {
                                 retryCount++;
-                                log.error(errMessage + ", number of retries left: " + (maxRetryCount-retryCount));
-                                Thread.sleep(delayMillis);
+                                log.error(errMessage + ", number of retries left: " + (params.getMaxRetryCount()-retryCount));
+                                Thread.sleep(params.getDelayMillis());
                                 continue;
                             } else {
                                 throw new RuntimeException(errMessage);    
@@ -227,10 +187,10 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
         }
 
         if (counters.currentValue(COUNTER_NAME_TOTAL) == 0) {
-            log.warn("no records imported from SH URI: " + shEndpointUriRoot);
+            log.warn("no records imported from SH URI: " + params.getShEndpointUriRoot());
         }
         countersWriter.writeCounters(counters, System.getProperty(OOZIE_ACTION_OUTPUT_FILENAME));
-        storeNextElementIndex(startElementIndex + currentCount);
+        storeNextElementIndex(params.getStartElementIndex() + currentCount);
     }
 
     /**
@@ -242,9 +202,17 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
                 SoftwareHeritageOrigin.SCHEMA$);
     }
 
-    // ------------------------ PRIVATE --------------------------
+    /**
+     * Builds HTTP client issuing requests to SH endpoint.
+     */
+    protected HttpClient buildHttpClient(int connectionTimeout, int readTimeout) {
+        HttpParams httpParams = new BasicHttpParams();
+        HttpConnectionParams.setConnectionTimeout(httpParams, connectionTimeout);
+        HttpConnectionParams.setSoTimeout(httpParams, readTimeout);
+        return new DefaultHttpClient(httpParams);
+    }
     
-    private void storeNextElementIndex(int nextElementIndex) throws IOException {
+    protected static void storeNextElementIndex(int nextElementIndex) throws IOException {
         File file = new File(System.getProperty(OOZIE_ACTION_OUTPUT_FILENAME));
 
         Properties props = new Properties();
@@ -269,7 +237,7 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
         }   
     }
 
-    private static String buildUri(String rootUri, int startElement, int pageSize) {
+    protected static String buildUri(String rootUri, int startElement, int pageSize) {
         StringBuilder strBuilder = new StringBuilder(rootUri);
         strBuilder.append("?origin_from=");
         strBuilder.append(startElement);
@@ -278,7 +246,7 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
         return strBuilder.toString();
     }
 
-    private static SoftwareHeritageOriginEntry[] parsePage(String originsPage, Gson gson) {
+    protected static SoftwareHeritageOriginEntry[] parsePage(String originsPage, Gson gson) {
         if (StringUtils.isNotBlank(originsPage)) {
             try {
                 return gson.fromJson(originsPage, SoftwareHeritageOriginEntry[].class);
@@ -290,23 +258,25 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
         }
     }
 
-    private static SoftwareHeritageOrigin convertEntry(SoftwareHeritageOriginEntry source) {
+    protected static SoftwareHeritageOrigin convertEntry(SoftwareHeritageOriginEntry source) {
         SoftwareHeritageOrigin.Builder resultBuilder = SoftwareHeritageOrigin.newBuilder();
         resultBuilder.setOrigin(source.getType());
         resultBuilder.setUrl(source.getUrl());
         return resultBuilder.build();
     }
 
-    private static String getNextLinkFromHeaders(Header[] headers) {
-        for (int i = 0; i < headers.length; i++) {
-            if (HEADER_LINK.equals(headers[i].getName())) {
-                return getNextLinkFromHeader(headers[i].getValue());
-            }
+    protected static String getNextLinkFromHeaders(Header[] headers) {
+        if (headers != null) {
+            for (int i = 0; i < headers.length; i++) {
+                if (HEADER_LINK.equals(headers[i].getName())) {
+                    return getNextLinkFromHeader(headers[i].getValue());
+                }
+            }    
         }
         return null;
     }
 
-    private static String getNextLinkFromHeader(String linkHeader) {
+    protected static String getNextLinkFromHeader(String linkHeader) {
         if (StringUtils.isNotBlank(linkHeader)) {
             String[] links = linkHeader.split(DELIM_LINKS);
             for (String link : links) {
@@ -343,7 +313,7 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
     /**
      * Prepares next request based on a link from header. Returns null when next page is not available.
      */
-    private static HttpRequest prepareNextRequest(HttpResponse httpResponse) {
+    protected static HttpRequest prepareNextRequest(HttpResponse httpResponse) {
         String nextUrl = getNextLinkFromHeaders(httpResponse.getAllHeaders());
         if (StringUtils.isNotBlank(nextUrl)) {
             return new HttpGet(nextUrl);
@@ -352,4 +322,113 @@ public class SoftwareHeritageOriginsImporter implements eu.dnetlib.iis.common.ja
         }
     }
 
+    /**
+     * Set of parsed input parameters.
+     *
+     */
+    static class SoftwareHeritageOriginsImporterParams {
+        
+        private final String shEndpointUriRoot;
+
+        private final String shEndpointHost;
+        
+        private final String shEndpointScheme;
+        
+        private final int shEndpointPort;
+        
+        private final int startElementIndex;
+        
+        private final int pageSize;
+        
+        private final int connectionTimeout;
+        
+        private final int readTimeout;
+        
+        private final int delayMillis;
+        
+        private final int maxRetryCount;
+        
+        public SoftwareHeritageOriginsImporterParams(Map<String, String> parameters) {
+            Preconditions.checkArgument(parameters.containsKey(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_URI_ROOT),
+                    "unknown software heritage endpoint URI, required parameter '%s' is missing!",
+                    IMPORT_SOFTWARE_HERITAGE_ENDPOINT_URI_ROOT);
+            this.shEndpointUriRoot = parameters.get(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_URI_ROOT);
+
+            Preconditions.checkArgument(parameters.containsKey(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_HOST),
+                    "unknown software heritage endpoint host, required parameter '%s' is missing!",
+                    IMPORT_SOFTWARE_HERITAGE_ENDPOINT_HOST);
+            this.shEndpointHost = parameters.get(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_HOST);
+
+            Preconditions.checkArgument(parameters.containsKey(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_SCHEME),
+                    "unknown software heritage endpoint scheme (e.g. https), required parameter '%s' is missing!",
+                    IMPORT_SOFTWARE_HERITAGE_ENDPOINT_SCHEME);
+            this.shEndpointScheme = parameters.get(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_SCHEME);
+
+            Preconditions.checkArgument(parameters.containsKey(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_PORT),
+                    "unknown software heritage endpoint port, required parameter '%s' is missing!",
+                    IMPORT_SOFTWARE_HERITAGE_ENDPOINT_PORT);
+            this.shEndpointPort = Integer.parseInt(parameters.get(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_PORT));
+
+            Preconditions.checkArgument(parameters.containsKey(IMPORT_SOFTWARE_HERITAGE_START_INDEX),
+                    "unknown software heritage start element, required parameter '%s' is missing!",
+                    IMPORT_SOFTWARE_HERITAGE_START_INDEX);
+            this.startElementIndex = Integer.parseInt(WorkflowRuntimeParameters
+                    .getParamValueWithUndefinedCheck(IMPORT_SOFTWARE_HERITAGE_START_INDEX, "1", parameters));
+            
+            this.pageSize = Integer.parseInt(WorkflowRuntimeParameters.getParamValue(IMPORT_SOFTWARE_HERITAGE_PAGE_SIZE,
+                    SOFTWARE_HERITAGE_PAGE_SIZE_DEFAULT_VALUE, parameters));
+
+            this.connectionTimeout = Integer.parseInt(WorkflowRuntimeParameters
+                    .getParamValue(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_CONNECTION_TIMEOUT, "60000", parameters));
+            this.readTimeout = Integer.parseInt(WorkflowRuntimeParameters
+                    .getParamValue(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_READ_TIMEOUT, "60000", parameters));
+            this.delayMillis = Integer.parseInt(WorkflowRuntimeParameters
+                    .getParamValue(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_RATELIMIT_DELAY, "10000", parameters));
+
+            this.maxRetryCount = Integer.parseInt(WorkflowRuntimeParameters
+                    .getParamValueWithUndefinedCheck(IMPORT_SOFTWARE_HERITAGE_ENDPOINT_RETRY_COUNT, "10", parameters));
+        }
+        
+        public String getShEndpointUriRoot() {
+            return shEndpointUriRoot;
+        }
+
+        public String getShEndpointHost() {
+            return shEndpointHost;
+        }
+
+        public String getShEndpointScheme() {
+            return shEndpointScheme;
+        }
+
+        public int getShEndpointPort() {
+            return shEndpointPort;
+        }
+
+        public int getStartElementIndex() {
+            return startElementIndex;
+        }
+
+        public int getPageSize() {
+            return pageSize;
+        }
+
+        public int getConnectionTimeout() {
+            return connectionTimeout;
+        }
+
+        public int getReadTimeout() {
+            return readTimeout;
+        }
+
+        public int getDelayMillis() {
+            return delayMillis;
+        }
+
+        public int getMaxRetryCount() {
+            return maxRetryCount;
+        }
+        
+    }
+    
 }

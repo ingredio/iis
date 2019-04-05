@@ -3,7 +3,7 @@
 	<parameters>
         <property>
             <name>offlineMode</name>
-            <value>true</value>
+            <value>false</value>
             <description>works in offline mode by retrieving data from cache only, no call to external SH API endpoint is being executed</description>
         </property>
         <property>
